@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+'''
+===================================================================================================================================================
+Project:Information Retrieval- Crawl and Index
+Author:Andrew Murray
+Student number:100214063
+===================================================================================================================================================
+'''
+
+import sys
+import re
+import json
+import math
+
+# global declarations for doclist, postings, vocabulary
+docids = []
+postings = {}
+vocab = []
+doclength ={}
+
+
+def main():
+    # code for testing offline	
+    if len(sys.argv) < 2:
+        print ('usage: ./retriever.py term [term ...]')
+        sys.exit(1)
+    query_terms = sys.argv[1:]
+    read_index_files()
+    answer = []
+    #answer =retrieve_bool(query_terms)
+    answer= retrieve_vector(query_terms)
+    print ('Query: ', query_terms)
+    i = -1
+    for docid in answer:
+        i += 1
+        print (i, answer[i])
+
+
+def read_index_files():
+    ## reads existing data from index files: docids, vocab, postings
+    # uses JSON to preserve list/dictionary data structures
+    # declare refs to global variables
+    global docids
+    global postings
+    global vocab
+    # open the files
+    in_d = open('docids1.txt', 'r')
+    in_v = open('vocab1.txt', 'r')
+    in_p = open('postings1.txt', 'r')
+    # load the data
+    docids = json.load(in_d)
+    vocab = json.load(in_v)
+    postings = json.load(in_p)
+    # close the files
+    in_d.close()
+    in_v.close()
+    in_p.close()
+    
+    return
+    
+    
+def retrieve_bool(query_terms):
+    
+    global docids       # contains URLs + docids
+    global postings    # contains wordids + docids, frequencies
+    global vocab        # contains words + wordids
+    global doclength    # contains docids + lengths
+    #### your code starts here ####
+    answer= [] ###list of relevant pages
+    query_termids= [] #termid of query
+    operators=[] ### AND/OR/NOT
+    
+    for term in query_terms: 
+        if term in ('AND','OR','NOT'):## must be done first to not add to query terms
+            operators.append(term) ### adding the term(AND,OR,NOT) to operators
+            continue
+        if term in vocab:
+            query_termids.append(vocab.index(term)) ###get termid of query from vocab
+        else:
+            print('The term (',term,')is not in vocab') ### query not in the vocab
+    
+    answer = postings.get(str(query_termids.pop(0))) #removes and returns first query term onto answer/ initialise answer.. first term posting
+    for termid in query_termids: ##for the termid in the query
+
+########### means that during for loop, it will use the posting of the first query term in order to do the other operations
+########### depending on the operation, it will either add DOCIDS(the respected urls) to the answer or take away 
+        if len(postings.get(str(termid)))>len(answer): ## number of items in postings for second or more quries>number of items in the posting of first query terms
+            list1 = answer #list 1 becomes posting for first query 
+            list2 = postings.get(str(termid))#posting of the other query termids
+        else:## to shorten loop, for loop through shortest list
+            list2 = answer##posting of first query term
+            list1 = postings.get(str(termid))## posting of the second or more queries
+        answer = [] #clear answer
+        operator= operators.pop()## clear and return value
+        ##must be in list1
+        for post2 in list1: ##for the docids(answers) in list1
+            if operator =='AND': ## intersection of both lists ##NEED TO ADD CATCH FOR INVALID QUERY
+                if post2 in list2: #only if its in the both lists
+                    answer.append(post2)
+            if operator =='NOT':
+                if post2 not in list2: ##A but not B' venn diagram
+                    answer.append(post2)
+            if operator =='OR': ##add lists together
+                answer = list(set(list1+list2)) ## posting of the first term+ postings of the other termid in query
+    return answer
+
+def retrieve_vector(query_terms):
+    ## a function to perform vector model retrieval with tf*idf weighting
+    #
+    global docids       # list of doc names - the index is the docid (i.e. 0-4)
+    global doclength    # number of terms in each document
+    global vocab        # list of terms found (237) - the index is the termid
+    global postings # postings dictionary; the key is a termid
+                        # the value is a list of postings entries, 
+                        # each of which is a list containing a docid and frequency
+
+    answer= []
+    merge_list= []
+    idf= {}
+    scores= {}
+    query_vector =[]
+    
+    query_set= set(query_terms) ##removes duplicates
+    
+    for term in query_set:
+        try:
+            termid= vocab.index(term.lower())
+        except: ##if not in vocab
+            print("term",term," is not in vocab")
+            continue
+        idf[termid]= (1+math.log(len(postings.get(str(termid)))))/len(str(doclength))
+        print("TERM for retrieve_vector: ",term,"TERMID: ", termid, "IDF: ",idf[termid])
+    i=-1
+    
+    for termid in sorted(idf,key=idf.get,reverse=True):
+        print("POSTINGS",postings.get(str(termid)))
+        i+=1
+        query_vector[i]= idf[termid]/len(query_set)
+        print('QVVV',query_vector[i])
+        for post in postings.get(termid):
+            print(post)
+            print("post0 :",post[0],"POST1",post[1])
+            if post[0] in scores:
+                scores[post[0]]+=(idf.get(termid)*post[1])/doclength.get(post[0])*query_vector[i]
+                print("yes")
+            else:
+                #scores[post[0]]=(idf.get(termid)*post[1])/doclength.get(post[0])*query_vector[i]
+                print("no")
+            #print((idf.get(termid)*post[1])/doclength.get(post[0]))
+            
+    for docid in sorted(scores,key=scores.get,reverse=True):
+        #print("retrieve vector(docid): ",docid,"score: ",scores.get(docid))
+        answer.append([docid,scores.get(docid)])
+    
+    return answer
+            
+    # Standard boilerplate to call the main() function
+if __name__ == '__main__':
+    main()
+
+
+    
+
